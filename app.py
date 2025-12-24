@@ -22,7 +22,8 @@ uploaded_file = st.file_uploader(
 if uploaded_file is not None:
     try:
         # Read CSV safely
-        data = pd.read_csv(uploaded_file, encoding='utf-8')
+        data = pd.read_csv(uploaded_file)
+
 
         st.subheader("Dataset Preview")
         st.dataframe(data.head())
