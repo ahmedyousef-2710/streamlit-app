@@ -12,8 +12,8 @@ st.set_page_config(page_title="Car Features Clustering App", layout="centered")
 st.title("Car Features Clustering App")
 
 st.markdown("""
-This app applies clustering on car features using **K-Means** and visualizes
-the result using **PCA**.
+This app applies **K-Means clustering** on car features and visualizes
+the clusters using **PCA**.
 """)
 
 # File uploader
@@ -23,21 +23,31 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
+
     try:
-        # --- Safe CSV loading (encoding + separator) ---
+        # 🔴 VERY IMPORTANT: reset file pointer
+        uploaded_file.seek(0)
+
+        # 🔹 Auto-detect separator and handle bad CSVs
         try:
-            data = pd.read_csv(uploaded_file, encoding="utf-8")
-        except UnicodeDecodeError:
-            data = pd.read_csv(uploaded_file, encoding="latin1")
+            data = pd.read_csv(uploaded_file, sep=None, engine="python")
+        except pd.errors.EmptyDataError:
+            st.error("❌ The uploaded CSV file is empty or invalid.")
+            st.stop()
+
+        # 🔹 Validate CSV structure
+        if data.empty or data.shape[1] == 0:
+            st.error("❌ CSV file contains no usable columns.")
+            st.stop()
 
         st.subheader("Dataset Preview")
         st.dataframe(data.head())
 
-        # Select numeric columns only
+        # Select numeric columns
         numeric_columns = data.select_dtypes(include="number").columns.tolist()
 
         if not numeric_columns:
-            st.warning("No numeric columns found in the dataset.")
+            st.warning("⚠ No numeric columns found in the dataset.")
             st.stop()
 
         selected_features = st.multiselect(
@@ -46,14 +56,14 @@ if uploaded_file is not None:
         )
 
         if len(selected_features) < 2:
-            st.warning("Please select at least two numeric features.")
+            st.warning("⚠ Please select at least two numeric features.")
             st.stop()
 
         # Prepare data
         X = data[selected_features].dropna()
 
         if X.empty:
-            st.error("Selected features contain only missing values.")
+            st.error("❌ Selected features contain only missing values.")
             st.stop()
 
         # Scaling
@@ -71,7 +81,7 @@ if uploaded_file is not None:
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
         clusters = kmeans.fit_predict(X_pca)
 
-        # Assign clusters back
+        # Attach clusters to original data
         data = data.loc[X.index]
         data["Cluster"] = clusters
 
