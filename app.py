@@ -16,26 +16,36 @@ This app applies **K-Means clustering** on car features and visualizes
 the clusters using **PCA**.
 """)
 
-# File uploader
 uploaded_file = st.file_uploader(
     "Upload a CSV file with car features",
     type=["csv"]
 )
 
 if uploaded_file is not None:
-
     try:
-        # 🔴 VERY IMPORTANT: reset file pointer
+        # 🔴 Reset file pointer
         uploaded_file.seek(0)
 
-        # 🔹 Auto-detect separator and handle bad CSVs
+        # 🔹 Encoding + separator safe loading
         try:
-            data = pd.read_csv(uploaded_file, sep=None, engine="python")
+            data = pd.read_csv(
+                uploaded_file,
+                sep=None,
+                engine="python",
+                encoding="utf-8"
+            )
+        except UnicodeDecodeError:
+            uploaded_file.seek(0)
+            data = pd.read_csv(
+                uploaded_file,
+                sep=None,
+                engine="python",
+                encoding="latin1"
+            )
         except pd.errors.EmptyDataError:
             st.error("❌ The uploaded CSV file is empty or invalid.")
             st.stop()
 
-        # 🔹 Validate CSV structure
         if data.empty or data.shape[1] == 0:
             st.error("❌ CSV file contains no usable columns.")
             st.stop()
@@ -43,7 +53,6 @@ if uploaded_file is not None:
         st.subheader("Dataset Preview")
         st.dataframe(data.head())
 
-        # Select numeric columns
         numeric_columns = data.select_dtypes(include="number").columns.tolist()
 
         if not numeric_columns:
@@ -59,37 +68,29 @@ if uploaded_file is not None:
             st.warning("⚠ Please select at least two numeric features.")
             st.stop()
 
-        # Prepare data
         X = data[selected_features].dropna()
 
         if X.empty:
             st.error("❌ Selected features contain only missing values.")
             st.stop()
 
-        # Scaling
         scaler = RobustScaler()
         X_scaled = scaler.fit_transform(X)
 
-        # PCA for visualization
         pca = PCA(n_components=2)
         X_pca = pca.fit_transform(X_scaled)
 
-        # Number of clusters
         k = st.slider("Number of clusters (k)", 2, 10, 3)
 
-        # KMeans clustering
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
         clusters = kmeans.fit_predict(X_pca)
 
-        # Attach clusters to original data
         data = data.loc[X.index]
         data["Cluster"] = clusters
 
-        # Silhouette score
         score = silhouette_score(X_pca, clusters)
         st.success(f"Silhouette Score: {round(score, 3)}")
 
-        # Plot clusters
         fig, ax = plt.subplots()
         ax.scatter(
             X_pca[:, 0],
