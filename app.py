@@ -7,10 +7,13 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 
+st.set_page_config(page_title="Car Features Clustering App", layout="centered")
+
 st.title("Car Features Clustering App")
 
-st.markdown(""" 
-This app applies clustering on car features
+st.markdown("""
+This app applies clustering on car features using **K-Means** and visualizes
+the result using **PCA**.
 """)
 
 # File uploader
@@ -21,66 +24,77 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     try:
-        # Read CSV safely
-        data = pd.read_csv(uploaded_file)
-
+        # --- Safe CSV loading (encoding + separator) ---
+        try:
+            data = pd.read_csv(uploaded_file, encoding="utf-8")
+        except UnicodeDecodeError:
+            data = pd.read_csv(uploaded_file, encoding="latin1")
 
         st.subheader("Dataset Preview")
         st.dataframe(data.head())
 
-        # Select numeric columns
+        # Select numeric columns only
         numeric_columns = data.select_dtypes(include="number").columns.tolist()
 
         if not numeric_columns:
             st.warning("No numeric columns found in the dataset.")
-        else:
-            selected_features = st.multiselect(
-                "Select numeric features for clustering",
-                numeric_columns
-            )
+            st.stop()
 
-            if len(selected_features) >= 2:
-                X = data[selected_features]
+        selected_features = st.multiselect(
+            "Select numeric features for clustering",
+            numeric_columns
+        )
 
-                # Scaling
-                scaler = RobustScaler()
-                X_scaled = scaler.fit_transform(X)
+        if len(selected_features) < 2:
+            st.warning("Please select at least two numeric features.")
+            st.stop()
 
-                # PCA for 2D visualization
-                pca = PCA(n_components=2)
-                X_pca = pca.fit_transform(X_scaled)
+        # Prepare data
+        X = data[selected_features].dropna()
 
-                # Number of clusters
-                k = st.slider("Number of clusters (k)", 2, 10, 3)
+        if X.empty:
+            st.error("Selected features contain only missing values.")
+            st.stop()
 
-                # KMeans clustering
-                kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-                clusters = kmeans.fit_predict(X_pca)
+        # Scaling
+        scaler = RobustScaler()
+        X_scaled = scaler.fit_transform(X)
 
-                data["Cluster"] = clusters
+        # PCA for visualization
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X_scaled)
 
-                # Silhouette score
-                score = silhouette_score(X_pca, clusters)
-                st.write("Silhouette Score:", round(score, 3))
+        # Number of clusters
+        k = st.slider("Number of clusters (k)", 2, 10, 3)
 
-                # Plot
-                fig, ax = plt.subplots()
-                scatter = ax.scatter(
-                    X_pca[:, 0],
-                    X_pca[:, 1],
-                    c=clusters,
-                    cmap="viridis"
-                )
-                ax.set_xlabel("PC1")
-                ax.set_ylabel("PC2")
-                ax.set_title("Car Clusters (PCA Projection)")
-                st.pyplot(fig)
+        # KMeans clustering
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        clusters = kmeans.fit_predict(X_pca)
 
-                st.subheader("Clustered Data")
-                st.dataframe(data)
+        # Assign clusters back
+        data = data.loc[X.index]
+        data["Cluster"] = clusters
 
-            else:
-                st.warning("Please select at least two numeric features.")
+        # Silhouette score
+        score = silhouette_score(X_pca, clusters)
+        st.success(f"Silhouette Score: {round(score, 3)}")
+
+        # Plot clusters
+        fig, ax = plt.subplots()
+        ax.scatter(
+            X_pca[:, 0],
+            X_pca[:, 1],
+            c=clusters,
+            cmap="viridis"
+        )
+        ax.set_xlabel("PC1")
+        ax.set_ylabel("PC2")
+        ax.set_title("Car Clusters (PCA Projection)")
+        st.pyplot(fig)
+
+        st.subheader("Clustered Data")
+        st.dataframe(data)
 
     except Exception as e:
-        st.error(f"Error loading CSV file: {e}")
+        st.error("❌ Failed to process the CSV file.")
+        st.exception(e)
